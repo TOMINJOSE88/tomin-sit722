@@ -42,16 +42,23 @@ jobs:
           resource-group: ${{ env.RESOURCE_GROUP }}
           cluster-name: ${{ env.CLUSTER_NAME }}
 
-      # Download artifact from CI
+      # Download artifact only if triggered by CI
       - name: Download frontend image tag artifact
+        if: ${{ github.event_name == 'workflow_run' }}
         uses: actions/download-artifact@v4
         with:
           name: frontend-image-tag
           path: .
 
       - name: Read image tag
+        if: ${{ github.event_name == 'workflow_run' }}
         id: image
-        run: echo "IMAGE=$(cat image-tag.txt)" >> $GITHUB_ENV
+        run: echo "IMAGE_TAG=$(cat image-tag.txt)" >> $GITHUB_ENV
+
+      # Fallback for manual push/dispatch (use latest)
+      - name: Use 'latest' image if no artifact available
+        if: ${{ github.event_name != 'workflow_run' }}
+        run: echo "IMAGE_TAG=latest" >> $GITHUB_ENV
 
       # Ensure namespace exists
       - name: Ensure namespace exists
@@ -61,7 +68,7 @@ jobs:
       # Update Deployment with new image
       - name: Set image in frontend deployment
         run: |
-          kubectl set image deployment/frontend frontend=${{ env.IMAGE }} -n ${{ env.NAMESPACE }}
+          kubectl set image deployment/frontend frontend=${{ secrets.AZURE_CONTAINER_REGISTRY }}/frontend:${{ env.IMAGE_TAG }} -n ${{ env.NAMESPACE }}
 
       # Apply Ingress
       - name: Apply Ingress
