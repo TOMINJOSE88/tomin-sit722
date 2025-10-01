@@ -24,35 +24,35 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Azure Login
+      # Login to Azure
       - name: Azure Login
         uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      # Get AKS Credentials
+      # Get AKS Context
       - name: Set up AKS credentials
         uses: azure/aks-set-context@v3
         with:
           resource-group: ${{ env.RESOURCE_GROUP }}
           cluster-name: ${{ env.CLUSTER_NAME }}
 
-      # Create namespace if not exists
+      # Ensure namespace exists
       - name: Ensure namespace exists
         run: |
           kubectl create namespace ${{ env.NAMESPACE }} --dry-run=client -o yaml | kubectl apply -f -
 
-      # Apply Secrets & ConfigMap
+      # Apply secrets and configmaps
       - name: Apply Secrets and ConfigMap
         run: |
           kubectl apply -f k8s/secrets.yaml -n ${{ env.NAMESPACE }}
           kubectl apply -f k8s/postgres-configmap.yaml -n ${{ env.NAMESPACE }}
 
-      # Apply Postgres DB
+      # Apply Postgres
       - name: Apply Postgres
         run: kubectl apply -f k8s/postgres.yaml -n ${{ env.NAMESPACE }}
 
-      # Deploy Backend Services
+      # Deploy backend microservices
       - name: Deploy Customer Service
         run: kubectl apply -f k8s/customer-deployment.yaml -n ${{ env.NAMESPACE }}
 
@@ -62,13 +62,17 @@ jobs:
       - name: Deploy Product Service
         run: kubectl apply -f k8s/product-deployment.yaml -n ${{ env.NAMESPACE }}
 
-      # Restart Deployments (pulls latest images from ACR)
+      # Force pods to pull latest images
       - name: Restart backend deployments
         run: |
           kubectl rollout restart deployment/customer-service -n ${{ env.NAMESPACE }}
           kubectl rollout restart deployment/order-service -n ${{ env.NAMESPACE }}
           kubectl rollout restart deployment/product-service -n ${{ env.NAMESPACE }}
 
-      # Verify
-      - name: Verify pods
-        run: kubectl get pods -n ${{ env.NAMESPACE }}
+      # Verify rollout
+      - name: Verify backend deployments
+        run: |
+          kubectl rollout status deployment/customer-service -n ${{ env.NAMESPACE }}
+          kubectl rollout status deployment/order-service -n ${{ env.NAMESPACE }}
+          kubectl rollout status deployment/product-service -n ${{ env.NAMESPACE }}
+          kubectl get pods -n ${{ env.NAMESPACE }}
