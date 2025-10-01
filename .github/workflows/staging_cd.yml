@@ -26,7 +26,7 @@ jobs:
 
       # --- Get AKS creds for kubectl & terraform ---
       - name: Get AKS Credentials
-        run: az aks get-credentials --resource-group my-rg --name my-aks --overwrite-existing
+        run: az aks get-credentials --resource-group ecom-rg --name ecom-aks --overwrite-existing
 
       # --- Setup Terraform ---
       - name: Setup Terraform
