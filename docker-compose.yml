@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  customer-service:
+    build: ./backend/customer_service
+    container_name: customer_service
+    ports:
+      - "5001:8000"
+
+  order-service:
+    build: ./backend/order_service
+    container_name: order_service
+    ports:
+      - "5002:8000"
+
+  product-service:
+    build: ./backend/product_service
+    container_name: product_service
+    ports:
+      - "5003:8000"
+
+  frontend:
+    build: ./frontend
+    container_name: frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - customer-service
+      - order-service
+      - product-service

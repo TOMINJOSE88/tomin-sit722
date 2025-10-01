@@ -1,0 +1,72 @@
+name: Frontend CD - Deploy to AKS
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: ["Frontend CI - Build & Push Image"]
+    types:
+      - completed
+  push:
+    branches:
+      - main
+    paths:
+      - 'frontend/**'
+      - 'k8s/frontend-deployment.yaml'
+      - 'k8s/ingress.yaml'
+      - '.github/workflows/frontend-cd.yml'
+
+env:
+  RESOURCE_GROUP: ${{ secrets.AZURE_RESOURCE_GROUP }}
+  CLUSTER_NAME: ${{ secrets.AZURE_AKS_CLUSTER }}
+  NAMESPACE: default
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Azure Login
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      # Get AKS Credentials
+      - name: Set up AKS credentials
+        uses: azure/aks-set-context@v3
+        with:
+          resource-group: ${{ env.RESOURCE_GROUP }}
+          cluster-name: ${{ env.CLUSTER_NAME }}
+
+      # Download artifact from CI
+      - name: Download frontend image tag artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-image-tag
+          path: .
+
+      - name: Read image tag
+        id: image
+        run: echo "IMAGE=$(cat image-tag.txt)" >> $GITHUB_ENV
+
+      # Ensure namespace exists
+      - name: Ensure namespace exists
+        run: |
+          kubectl create namespace ${{ env.NAMESPACE }} --dry-run=client -o yaml | kubectl apply -f -
+
+      # Update Deployment with new image
+      - name: Set image in frontend deployment
+        run: |
+          kubectl set image deployment/frontend frontend=${{ env.IMAGE }} -n ${{ env.NAMESPACE }}
+
+      # Apply Ingress
+      - name: Apply Ingress
+        run: kubectl apply -f k8s/ingress.yaml -n ${{ env.NAMESPACE }}
+
+      # Verify rollout
+      - name: Verify frontend rollout
+        run: kubectl rollout status deployment/frontend -n ${{ env.NAMESPACE }}

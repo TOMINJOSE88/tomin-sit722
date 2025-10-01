@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: product-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: product-service
+  template:
+    metadata:
+      labels:
+        app: product-service
+    spec:
+      containers:
+        - name: product-service
+          image: ecomacr123.azurecr.io/product-service:manual
+          ports:
+            - containerPort: 8000
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: ecomm-secrets-w08e1
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ecomm-secrets-w08e1
+                  key: POSTGRES_PASSWORD
+            - name: POSTGRES_DB
+              value: products
+            - name: POSTGRES_HOST
+              value: postgres
+            - name: POSTGRES_PORT
+              value: "5432"
+            - name: AZURE_STORAGE_ACCOUNT_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: ecomm-secrets-w08e1
+                  key: AZURE_STORAGE_ACCOUNT_NAME
+            - name: AZURE_STORAGE_ACCOUNT_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ecomm-secrets-w08e1
+                  key: AZURE_STORAGE_ACCOUNT_KEY
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: product-service
+spec:
+  type: ClusterIP
+  selector:
+    app: product-service
+  ports:
+    - port: 8000
+      targetPort: 8000

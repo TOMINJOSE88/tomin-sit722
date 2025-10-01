@@ -1,0 +1,56 @@
+name: Frontend CI - Build & Push Image
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend_ci.yml'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend_ci.yml'
+
+env:
+  ACR_LOGIN_SERVER: ${{ secrets.AZURE_CONTAINER_REGISTRY }}
+  ACR_NAME: ${{ secrets.AZURE_ACR_NAME }}
+  IMAGE_TAG: ${{ github.sha }}-${{ github.run_id }}
+
+jobs:
+  build_and_push_frontend:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to Azure
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Login to Azure Container Registry
+        run: az acr login --name ${{ env.ACR_NAME }}
+
+      - name: Build and Push Frontend Image
+        run: |
+          docker build -t ${{ env.ACR_LOGIN_SERVER }}/frontend:${{ env.IMAGE_TAG }} ./frontend/
+          docker push ${{ env.ACR_LOGIN_SERVER }}/frontend:${{ env.IMAGE_TAG }}
+          docker tag ${{ env.ACR_LOGIN_SERVER }}/frontend:${{ env.IMAGE_TAG }} ${{ env.ACR_LOGIN_SERVER }}/frontend:latest
+          docker push ${{ env.ACR_LOGIN_SERVER }}/frontend:latest
+
+      # Save the exact image tag for CD workflow
+      - name: Save image tag
+        run: echo "${{ env.ACR_LOGIN_SERVER }}/frontend:${{ env.IMAGE_TAG }}" > image-tag.txt
+
+      - name: Upload image tag artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-image-tag
+          path: image-tag.txt
+
+      - name: Logout from Azure
+        if: always()
+        run: az logout
