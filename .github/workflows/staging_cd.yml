@@ -8,7 +8,9 @@ on:
 env:
   ACR_LOGIN_SERVER: ${{ secrets.AZURE_CONTAINER_REGISTRY }}
   ACR_NAME: ${{ secrets.AZURE_ACR_NAME }}
-  BACKEND_IMAGE: ${{ secrets.AZURE_CONTAINER_REGISTRY }}/backend:${{ github.sha }}
+  CUSTOMER_IMAGE: ${{ secrets.AZURE_CONTAINER_REGISTRY }}/customer:${{ github.sha }}
+  PRODUCT_IMAGE: ${{ secrets.AZURE_CONTAINER_REGISTRY }}/product:${{ github.sha }}
+  ORDER_IMAGE: ${{ secrets.AZURE_CONTAINER_REGISTRY }}/order:${{ github.sha }}
   FRONTEND_IMAGE: ${{ secrets.AZURE_CONTAINER_REGISTRY }}/frontend:${{ github.sha }}
 
 jobs:
@@ -38,14 +40,18 @@ jobs:
       - name: Terraform Plan
         run: |
           terraform -chdir=infra/staging plan \
-            -var="backend_image=${{ env.BACKEND_IMAGE }}" \
+            -var="customer_image=${{ env.CUSTOMER_IMAGE }}" \
+            -var="product_image=${{ env.PRODUCT_IMAGE }}" \
+            -var="order_image=${{ env.ORDER_IMAGE }}" \
             -var="frontend_image=${{ env.FRONTEND_IMAGE }}" \
             -var="run_id=${{ github.run_id }}"
 
       - name: Terraform Apply - Create Staging Infra
         run: |
           terraform -chdir=infra/staging apply -auto-approve \
-            -var="backend_image=${{ env.BACKEND_IMAGE }}" \
+            -var="customer_image=${{ env.CUSTOMER_IMAGE }}" \
+            -var="product_image=${{ env.PRODUCT_IMAGE }}" \
+            -var="order_image=${{ env.ORDER_IMAGE }}" \
             -var="frontend_image=${{ env.FRONTEND_IMAGE }}" \
             -var="run_id=${{ github.run_id }}"
 
@@ -54,25 +60,36 @@ jobs:
         run: |
           kubectl get pods -A
           kubectl get svc -A
+          kubectl get ingress -A
 
-      # --- Simple smoke test ---
+      # --- Simple smoke test via Ingress ---
       - name: Smoke Test
         continue-on-error: true
         run: |
-          echo "Waiting for services..."
+          echo "Waiting for ingress to become available..."
           sleep 120
-          BACKEND_IP=$(terraform -chdir=infra/staging output -raw backend_url)
-          FRONTEND_IP=$(terraform -chdir=infra/staging output -raw frontend_url)
-          echo "Backend IP: $BACKEND_IP"
-          echo "Frontend IP: $FRONTEND_IP"
-          curl -v http://$BACKEND_IP/health || exit 1
-          curl -v http://$FRONTEND_IP || exit 1
+          INGRESS_IP=$(terraform -chdir=infra/staging output -raw staging_ingress_ip)
+          echo "Ingress IP: $INGRESS_IP"
+
+          echo "Testing frontend..."
+          curl -v http://$INGRESS_IP/ || exit 1
+
+          echo "Testing customer..."
+          curl -v http://$INGRESS_IP/customer || exit 1
+
+          echo "Testing product..."
+          curl -v http://$INGRESS_IP/product || exit 1
+
+          echo "Testing order..."
+          curl -v http://$INGRESS_IP/order || exit 1
 
       # --- Destroy Staging Infra ---
       - name: Terraform Destroy
         if: always()
         run: |
           terraform -chdir=infra/staging destroy -auto-approve \
-            -var="backend_image=${{ env.BACKEND_IMAGE }}" \
+            -var="customer_image=${{ env.CUSTOMER_IMAGE }}" \
+            -var="product_image=${{ env.PRODUCT_IMAGE }}" \
+            -var="order_image=${{ env.ORDER_IMAGE }}" \
             -var="frontend_image=${{ env.FRONTEND_IMAGE }}" \
             -var="run_id=${{ github.run_id }}"

@@ -1,14 +1,24 @@
-variable "backend_image" {
-  description = "Backend image tag from ACR"
+variable "customer_image" {
   type        = string
+  description = "Customer service image"
+}
+
+variable "product_image" {
+  type        = string
+  description = "Product service image"
+}
+
+variable "order_image" {
+  type        = string
+  description = "Order service image"
 }
 
 variable "frontend_image" {
-  description = "Frontend image tag from ACR"
   type        = string
+  description = "Frontend image"
 }
 
 variable "run_id" {
-  description = "GitHub run ID to make namespace unique"
   type        = string
+  description = "GitHub run ID for unique namespace"
 }
