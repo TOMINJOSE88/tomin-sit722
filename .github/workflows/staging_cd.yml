@@ -66,9 +66,9 @@ jobs:
       # --- Debug: Check pods and services ---
       - name: Check Pods
         run: |
-          kubectl get pods -A
-          kubectl get svc -A
-          kubectl get ingress -A
+          kubectl get pods -n staging-${{ github.run_id }}
+          kubectl get svc -n staging-${{ github.run_id }}
+          kubectl get ingress -n staging-${{ github.run_id }}
 
       # --- Simple smoke test via Ingress ---
       - name: Smoke Test
@@ -76,20 +76,25 @@ jobs:
         run: |
           echo "Waiting for ingress to become available..."
           sleep 120
-          INGRESS_IP=$(terraform -chdir=infra/staging output -raw staging_ingress_ip)
+          INGRESS_IP=$(terraform -chdir=infra/staging output -raw staging_ingress_ip || echo "none")
           echo "Ingress IP: $INGRESS_IP"
 
-          echo "Testing frontend..."
-          curl -v http://$INGRESS_IP/ || exit 1
+          if [ "$INGRESS_IP" != "none" ]; then
+            echo "Testing frontend..."
+            curl -v http://$INGRESS_IP/ || exit 1
 
-          echo "Testing customer..."
-          curl -v http://$INGRESS_IP/customer || exit 1
+            echo "Testing customer..."
+            curl -v http://$INGRESS_IP/customer || exit 1
 
-          echo "Testing product..."
-          curl -v http://$INGRESS_IP/product || exit 1
+            echo "Testing product..."
+            curl -v http://$INGRESS_IP/product || exit 1
 
-          echo "Testing order..."
-          curl -v http://$INGRESS_IP/order || exit 1
+            echo "Testing order..."
+            curl -v http://$INGRESS_IP/order || exit 1
+          else
+            echo "No ingress IP available yet."
+            exit 1
+          fi
 
       # --- Destroy Staging Infra ---
       - name: Terraform Destroy
