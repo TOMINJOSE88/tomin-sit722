@@ -8,10 +8,10 @@ on:
 env:
   ACR_LOGIN_SERVER: ${{ secrets.AZURE_CONTAINER_REGISTRY }}
   ACR_NAME: ${{ secrets.AZURE_ACR_NAME }}
-  CUSTOMER_IMAGE: ${{ secrets.AZURE_CONTAINER_REGISTRY }}/customer_service:${{ github.sha }}
-  PRODUCT_IMAGE: ${{ secrets.AZURE_CONTAINER_REGISTRY }}/product_service:${{ github.sha }}
-  ORDER_IMAGE: ${{ secrets.AZURE_CONTAINER_REGISTRY }}/order_service:${{ github.sha }}
-  FRONTEND_IMAGE: ${{ secrets.AZURE_CONTAINER_REGISTRY }}/frontend:${{ github.sha }}
+  CUSTOMER_IMAGE: ${{ secrets.AZURE_CONTAINER_REGISTRY }}/customer_service:${{ github.sha }}-${{ github.run_id }}
+  PRODUCT_IMAGE:  ${{ secrets.AZURE_CONTAINER_REGISTRY }}/product_service:${{ github.sha }}-${{ github.run_id }}
+  ORDER_IMAGE:    ${{ secrets.AZURE_CONTAINER_REGISTRY }}/order_service:${{ github.sha }}-${{ github.run_id }}
+  FRONTEND_IMAGE: ${{ secrets.AZURE_CONTAINER_REGISTRY }}/frontend:${{ github.sha }}-${{ github.run_id }}
 
 jobs:
   staging:
@@ -54,6 +54,14 @@ jobs:
             -var="order_image=${{ env.ORDER_IMAGE }}" \
             -var="frontend_image=${{ env.FRONTEND_IMAGE }}" \
             -var="run_id=${{ github.run_id }}"
+
+      # --- Wait for deployments to roll out ---
+      - name: Wait for Rollout
+        run: |
+          kubectl rollout status deployment/customer -n staging-${{ github.run_id }} --timeout=180s
+          kubectl rollout status deployment/product -n staging-${{ github.run_id }} --timeout=180s
+          kubectl rollout status deployment/order -n staging-${{ github.run_id }} --timeout=180s
+          kubectl rollout status deployment/frontend -n staging-${{ github.run_id }} --timeout=180s
 
       # --- Debug: Check pods and services ---
       - name: Check Pods
