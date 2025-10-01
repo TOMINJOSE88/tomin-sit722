@@ -1,0 +1,62 @@
+name: Staging CD Pipeline
+
+on:
+  push:
+    branches:
+      - testing
+
+env:
+  ACR_LOGIN_SERVER: ${{ secrets.AZURE_CONTAINER_REGISTRY }}
+  ACR_NAME: ${{ secrets.AZURE_ACR_NAME }}
+  BACKEND_IMAGE: ${{ secrets.AZURE_CONTAINER_REGISTRY }}/backend:${{ github.sha }}
+  FRONTEND_IMAGE: ${{ secrets.AZURE_CONTAINER_REGISTRY }}/frontend:${{ github.sha }}
+
+jobs:
+  staging:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      # --- Login to Azure ---
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      # --- Get AKS creds for kubectl & terraform ---
+      - name: Get AKS Credentials
+        run: az aks get-credentials --resource-group my-rg --name my-aks --overwrite-existing
+
+      # --- Setup Terraform ---
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init
+        run: terraform init infra/staging
+
+      - name: Terraform Apply - Create Staging Infra
+        run: terraform apply -auto-approve \
+             -var="backend_image=${{ env.BACKEND_IMAGE }}" \
+             -var="frontend_image=${{ env.FRONTEND_IMAGE }}" \
+             -var="run_id=${{ github.run_id }}" \
+             infra/staging
+
+      # --- Simple smoke test ---
+      - name: Smoke Test
+        run: |
+          echo "Waiting for services..."
+          sleep 60
+          BACKEND_IP=$(terraform -chdir=infra/staging output -raw backend_url)
+          FRONTEND_IP=$(terraform -chdir=infra/staging output -raw frontend_url)
+          curl -f http://$BACKEND_IP/health || exit 1
+          curl -f http://$FRONTEND_IP || exit 1
+
+      # --- Destroy Staging Infra ---
+      - name: Terraform Destroy
+        if: always()
+        run: terraform destroy -auto-approve \
+             -var="backend_image=${{ env.BACKEND_IMAGE }}" \
+             -var="frontend_image=${{ env.FRONTEND_IMAGE }}" \
+             -var="run_id=${{ github.run_id }}" \
+             infra/staging
