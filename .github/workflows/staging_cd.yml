@@ -58,14 +58,21 @@ jobs:
       # --- Wait for deployments to roll out ---
       - name: Wait for Rollout
         run: |
-          kubectl rollout status deployment/customer -n staging-${{ github.run_id }} --timeout=180s
-          kubectl rollout status deployment/product -n staging-${{ github.run_id }} --timeout=180s
-          kubectl rollout status deployment/order -n staging-${{ github.run_id }} --timeout=180s
-          kubectl rollout status deployment/frontend -n staging-${{ github.run_id }} --timeout=180s
+          for svc in customer product order frontend; do
+            echo "Waiting for rollout of $svc..."
+            if ! kubectl rollout status deployment/$svc -n staging-${{ github.run_id }} --timeout=180s; then
+              echo "❌ Rollout failed for $svc. Dumping logs..."
+              kubectl describe deployment/$svc -n staging-${{ github.run_id }} || true
+              kubectl get pods -n staging-${{ github.run_id }} -l app=$svc -o wide || true
+              kubectl logs -l app=$svc -n staging-${{ github.run_id }} --tail=100 || true
+              exit 1
+            fi
+          done
 
       # --- Debug: Check pods and services ---
       - name: Check Pods
         run: |
+          echo "🔎 Pods and Services in staging-${{ github.run_id }}"
           kubectl get pods -n staging-${{ github.run_id }}
           kubectl get svc -n staging-${{ github.run_id }}
           kubectl get ingress -n staging-${{ github.run_id }}
