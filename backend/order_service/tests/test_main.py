@@ -2,17 +2,21 @@ import logging
 import time
 from decimal import Decimal
 from unittest.mock import AsyncMock, patch
+import os
 
 import pytest
 from app.db import SessionLocal, engine, get_db
-from app.main import PRODUCT_SERVICE_URL, app
+from app.main import app  # only import the FastAPI app now
 from app.models import Base, Order, OrderItem
 
 from fastapi.testclient import TestClient
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
-# Suppress noisy logs from SQLAlchemy/FastAPI/Uvicorn during tests for cleaner output
+# Fallback for product service URL if needed in future tests
+PRODUCT_SERVICE_URL = os.getenv("PRODUCT_SERVICE_URL", "http://localhost:8000/products")
+
+# Suppress noisy logs from SQLAlchemy/FastAPI/Uvicorn during tests
 logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
 logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 logging.getLogger("uvicorn.error").setLevel(logging.WARNING)
@@ -27,35 +31,21 @@ def setup_database_for_tests():
     retry_delay_seconds = 3
     for i in range(max_retries):
         try:
-            logging.info(
-                f"Order Service Tests: Attempting to connect to PostgreSQL for test setup (attempt {i+1}/{max_retries})..."
-            )
-            # Explicitly drop all tables first to ensure a clean slate for the session
+            logging.info(f"Order Service Tests: Attempting to connect to PostgreSQL for test setup (attempt {i+1}/{max_retries})...")
+            # Drop tables to ensure clean slate
             Base.metadata.drop_all(bind=engine)
-            logging.info(
-                "Order Service Tests: Successfully dropped all tables in PostgreSQL for test setup."
-            )
-
-            # Then create all tables required by the application
+            logging.info("Order Service Tests: Successfully dropped all tables in PostgreSQL for test setup.")
+            # Recreate tables
             Base.metadata.create_all(bind=engine)
-            logging.info(
-                "Order Service Tests: Successfully created all tables in PostgreSQL for test setup."
-            )
+            logging.info("Order Service Tests: Successfully created all tables in PostgreSQL for test setup.")
             break
         except OperationalError as e:
-            logging.warning(
-                f"Order Service Tests: Test setup DB connection failed: {e}. Retrying in {retry_delay_seconds} seconds..."
-            )
+            logging.warning(f"Order Service Tests: Test setup DB connection failed: {e}. Retrying in {retry_delay_seconds} seconds...")
             time.sleep(retry_delay_seconds)
             if i == max_retries - 1:
-                pytest.fail(
-                    f"Could not connect to PostgreSQL for Order Service test setup after {max_retries} attempts: {e}"
-                )
+                pytest.fail(f"Could not connect to PostgreSQL for Order Service test setup after {max_retries} attempts: {e}")
         except Exception as e:
-            pytest.fail(
-                f"Order Service Tests: An unexpected error occurred during test DB setup: {e}",
-                pytrace=True,
-            )
+            pytest.fail(f"Order Service Tests: An unexpected error occurred during test DB setup: {e}", pytrace=True)
 
     yield
 
@@ -90,9 +80,7 @@ def client():
 def mock_httpx_client():
     with patch("app.main.httpx.AsyncClient") as mock_async_client_cls:
         mock_client_instance = AsyncMock()
-        mock_async_client_cls.return_value.__aenter__.return_value = (
-            mock_client_instance
-        )
+        mock_async_client_cls.return_value.__aenter__.return_value = mock_client_instance
         yield mock_client_instance
 
 
