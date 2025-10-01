@@ -36,16 +36,18 @@ jobs:
         run: terraform -chdir=infra/staging init
 
       - name: Terraform Plan
-        run: terraform -chdir=infra/staging plan \
-             -var="backend_image=${{ env.BACKEND_IMAGE }}" \
-             -var="frontend_image=${{ env.FRONTEND_IMAGE }}" \
-             -var="run_id=${{ github.run_id }}"
+        run: |
+          terraform -chdir=infra/staging plan \
+            -var="backend_image=${{ env.BACKEND_IMAGE }}" \
+            -var="frontend_image=${{ env.FRONTEND_IMAGE }}" \
+            -var="run_id=${{ github.run_id }}"
 
       - name: Terraform Apply - Create Staging Infra
-        run: terraform -chdir=infra/staging apply -auto-approve \
-             -var="backend_image=${{ env.BACKEND_IMAGE }}" \
-             -var="frontend_image=${{ env.FRONTEND_IMAGE }}" \
-             -var="run_id=${{ github.run_id }}"
+        run: |
+          terraform -chdir=infra/staging apply -auto-approve \
+            -var="backend_image=${{ env.BACKEND_IMAGE }}" \
+            -var="frontend_image=${{ env.FRONTEND_IMAGE }}" \
+            -var="run_id=${{ github.run_id }}"
 
       # --- Debug: Check pods and services ---
       - name: Check Pods
@@ -69,7 +71,8 @@ jobs:
       # --- Destroy Staging Infra ---
       - name: Terraform Destroy
         if: always()
-        run: terraform -chdir=infra/staging destroy -auto-approve \
-             -var="backend_image=${{ env.BACKEND_IMAGE }}" \
-             -var="frontend_image=${{ env.FRONTEND_IMAGE }}" \
-             -var="run_id=${{ github.run_id }}"
+        run: |
+          terraform -chdir=infra/staging destroy -auto-approve \
+            -var="backend_image=${{ env.BACKEND_IMAGE }}" \
+            -var="frontend_image=${{ env.FRONTEND_IMAGE }}" \
+            -var="run_id=${{ github.run_id }}"
